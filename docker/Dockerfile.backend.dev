@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y \
 # 安装UV
 RUN pip install uv -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
-# 复制依赖配置
-COPY pyproject.toml uv.lock* README.md ./
+# 复制依赖配置和alembic配置
+COPY pyproject.toml uv.lock* README.md alembic.ini ./
+COPY migrations/ ./migrations/
 
 # 设置UV环境变量和安装Python依赖
 ENV UV_HTTP_TIMEOUT=300

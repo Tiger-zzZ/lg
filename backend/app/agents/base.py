@@ -1,12 +1,12 @@
 from typing import TypedDict, Dict, Any, List
-from langgraph import StateGraph
+from langgraph.graph import StateGraph
 from abc import ABC, abstractmethod
 import uuid
 import time
 import asyncio
 from datetime import datetime
 
-from ..core.logging import logger
+from app.core.logging import logger
 
 
 class AgentState(TypedDict):

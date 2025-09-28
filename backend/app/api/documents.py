@@ -11,14 +11,17 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.core.auth import get_current_user
-from app.core.logger import logger
+from app.api.auth import get_current_user
+from app.core.logging import logger
 from app.models.user import User
+from app.models.document import Document, DocumentChunk
+from app.core.database import get_db
 from app.rag.processor import DocumentProcessor, ProcessingResult
 from app.rag.search import SemanticSearch, SearchResult, SearchQuery
+from sqlalchemy.orm import Session
 
 # 创建路由器
-router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+router = APIRouter(prefix="/documents", tags=["documents"])
 
 # 初始化RAG组件
 doc_processor = DocumentProcessor()
@@ -57,10 +60,279 @@ SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.txt', '.md'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
+# 更简化的测试端点 - 带数据库持久化
+@router.post("/test/simple-upload")
+async def simple_upload_test(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    简单文档上传 (测试用，无需认证，带数据库持久化)
+
+    Args:
+        file: 上传的文件
+        db: 数据库会话
+
+    Returns:
+        简单的成功响应
+    """
+    try:
+        # 验证文件类型
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in SUPPORTED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的文件格式。支持的格式: {', '.join(SUPPORTED_EXTENSIONS)}"
+            )
+
+        # 验证文件大小
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)"
+            )
+
+        # 生成文档ID
+        import uuid
+        document_id = str(uuid.uuid4())
+
+        # 简单的块数计算 (每1000字符一个块)
+        chunks_count = max(1, len(content.decode('utf-8', errors='ignore')) // 1000)
+
+        # 保存到数据库
+        db_document = Document(
+            document_id=document_id,
+            file_name=file.filename,
+            file_size=len(content),
+            content_type=file.content_type,
+            chunks_count=chunks_count,
+            processing_status='completed',
+            user_id="00000000-0000-0000-0000-000000000000",  # 测试用户ID
+            document_metadata={
+                "upload_method": "simple_test",
+                "original_filename": file.filename
+            }
+        )
+
+        db.add(db_document)
+        db.commit()
+        db.refresh(db_document)
+
+        logger.info(f"简单文档上传成功: {file.filename}, document_id: {document_id}")
+
+        return {
+            "success": True,
+            "message": "文档上传成功 (简化版)",
+            "document_id": document_id,
+            "file_name": file.filename,
+            "chunks_count": chunks_count,
+            "processing_time": 0.1
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"简单文档上传失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"文档上传失败: {str(e)}")
+
+
+@router.get("/test/list")
+async def list_documents_test(db: Session = Depends(get_db)):
+    """
+    列出所有文档 (测试用，无需认证)
+
+    Args:
+        db: 数据库会话
+
+    Returns:
+        文档列表
+    """
+    try:
+        documents = db.query(Document).all()
+
+        return [
+            {
+                "document_id": doc.document_id,
+                "file_name": doc.file_name,
+                "created_at": doc.created_at.isoformat(),
+                "chunks_count": doc.chunks_count,
+                "processing_status": doc.processing_status,
+                "file_size": doc.file_size
+            }
+            for doc in documents
+        ]
+
+    except Exception as e:
+        logger.error(f"列出文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")
+
+
+@router.delete("/test/delete/{document_id}")
+async def delete_document_test(document_id: str, db: Session = Depends(get_db)):
+    """
+    删除文档 (测试用，无需认证)
+
+    Args:
+        document_id: 文档ID
+        db: 数据库会话
+
+    Returns:
+        删除结果
+    """
+    try:
+        # 根据document_id查找文档
+        document = db.query(Document).filter(Document.document_id == document_id).first()
+
+        if not document:
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+        # 删除文档
+        db.delete(document)
+        db.commit()
+
+        logger.info(f"文档删除成功: {document_id}")
+
+        return {"message": "文档删除成功", "document_id": document_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"删除文档失败: {str(e)}")
+
+
+class DocumentQARequest(BaseModel):
+    """文档问答请求模型"""
+    question: str
+
+
+@router.post("/test/qa")
+async def document_qa_test(
+    request: DocumentQARequest,
+    db: Session = Depends(get_db)
+):
+    """
+    文档问答 (测试用，无需认证，简化版)
+
+    Args:
+        question = request.question
+        db: 数据库会话
+
+    Returns:
+        问答结果
+    """
+    try:
+        question = request.question
+        # 获取所有文档数量作为上下文
+        document_count = db.query(Document).count()
+
+        if document_count == 0:
+            return {
+                "answer": "目前还没有上传任何文档，请先上传文档后再进行问答。",
+                "context": [],
+                "source_documents": []
+            }
+
+        # 模拟基于文档的回答
+        mock_answer = f"""基于您上传的 {document_count} 个文档，我来尝试回答您的问题："{question}"
+
+**回答：** 抱歉，当前是测试模式，我无法访问文档的具体内容来提供准确的回答。在完整版本中，系统会：
+
+1. 搜索相关文档片段
+2. 理解问题的上下文
+3. 基于文档内容生成准确回答
+
+**建议：** 请确保您的问题与上传的文档内容相关，这样我能提供更有价值的回答。
+
+*注：这是简化的测试版本，完整功能正在开发中。*"""
+
+        return {
+            "answer": mock_answer,
+            "context": f"基于 {document_count} 个已上传文档",
+            "source_documents": [],
+            "question": question
+        }
+
+    except Exception as e:
+        logger.error(f"文档问答失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"问答失败: {str(e)}")
+@router.post("/test/upload", response_model=DocumentUploadResponse)
+async def upload_document_test(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    上传并处理文档 (测试用，无需认证)
+
+    Args:
+        file: 上传的文件
+        db: 数据库会话
+
+    Returns:
+        DocumentUploadResponse: 上传处理结果
+    """
+    try:
+        # 验证文件类型
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in SUPPORTED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的文件格式。支持的格式: {', '.join(SUPPORTED_EXTENSIONS)}"
+            )
+
+        # 验证文件大小
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"文件大小超过限制 ({MAX_FILE_SIZE // 1024 // 1024}MB)"
+            )
+
+        # 创建临时文件
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=file_extension,
+            prefix=f"upload_test_"
+        ) as temp_file:
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+
+        try:
+            # 处理文档
+            metadata = {
+                "user_id": "00000000-0000-0000-0000-000000000000",  # 测试用户UUID
+                "original_filename": file.filename,
+                "file_size": len(content),
+                "content_type": file.content_type
+            }
+
+            result = await doc_processor.process_document(temp_file_path, metadata, db)
+
+            if result.success:
+                logger.info(f"文档上传成功 (测试): {file.filename}")
+                return DocumentUploadResponse(
+                    success=True,
+                    message="文档上传并处理成功",
+                    document_id=result.document_id,
+                    file_name=file.filename,
+                    chunks_count=result.chunks_count,
+                    processing_time=result.processing_time
+                )
+            else:
+                raise HTTPException(status_code=500, detail=result.message)
+
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"文档上传失败 (测试): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"文档上传失败: {str(e)}")
+
+
 @router.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     上传并处理文档
@@ -68,6 +340,7 @@ async def upload_document(
     Args:
         file: 上传的文件
         current_user: 当前用户
+        db: 数据库会话
 
     Returns:
         DocumentUploadResponse: 上传处理结果
@@ -107,7 +380,7 @@ async def upload_document(
                 "content_type": file.content_type
             }
 
-            result = await doc_processor.process_document(temp_file_path, metadata)
+            result = await doc_processor.process_document(temp_file_path, metadata, db)
 
             if result.success:
                 logger.info(f"文档上传成功: {file.filename}, 用户: {current_user.id}")
@@ -201,6 +474,74 @@ async def list_documents(
 
         return user_documents
 
+    except Exception as e:
+        logger.error(f"列出文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")
+
+
+@router.get("/list", response_model=List[DocumentInfo])
+async def list_documents_alias():
+    """
+    列出所有文档 (兼容前端，开发期间无需认证)
+
+    Returns:
+        List[DocumentInfo]: 文档列表
+    """
+    try:
+        # 在开发环境中，使用简单的测试用户
+        from app.core.database import get_db
+        from app.models.document import Document
+
+        # 获取数据库会话
+        db = next(get_db())
+
+        try:
+            documents = db.query(Document).all()
+
+            return [
+                DocumentInfo(
+                    document_id=doc.document_id,
+                    file_name=doc.file_name,
+                    created_at=doc.created_at.isoformat(),
+                    chunks_count=doc.chunks_count,
+                    file_path=doc.file_path
+                )
+                for doc in documents
+            ]
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"列出文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")
+
+
+# 开发环境的无认证列表端点 (兼容前端开发)
+@router.get("/list/dev")
+async def list_documents_dev(db: Session = Depends(get_db)):
+    """
+    列出所有文档 (开发用，无需认证)
+
+    Args:
+        db: 数据库会话
+
+    Returns:
+        List[DocumentInfo]: 文档列表
+    """
+    try:
+        documents = db.query(Document).all()
+
+        return [
+            {
+                "document_id": doc.document_id,
+                "file_name": doc.file_name,
+                "created_at": doc.created_at.isoformat(),
+                "chunks_count": doc.chunks_count,
+                "processing_status": doc.processing_status,
+                "file_size": doc.file_size
+            }
+            for doc in documents
+        ]
     except Exception as e:
         logger.error(f"列出文档失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")

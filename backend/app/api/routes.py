@@ -1,7 +1,8 @@
 from fastapi import APIRouter
-from .auth import router as auth_router
-from .agents import router as agents_router
-from .documents import router as documents_router
+from app.api.auth import router as auth_router
+from app.api.agents import router as agents_router
+from app.api.documents import router as documents_router
+from app.api.chat import router as chat_router
 
 # 创建主路由
 api_router = APIRouter()
@@ -10,6 +11,7 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(agents_router)
 api_router.include_router(documents_router)
+api_router.include_router(chat_router)
 
 
 @api_router.get("/")
@@ -24,6 +26,7 @@ async def api_root():
             "auth": "/api/v1/auth",
             "agents": "/api/v1/agents",
             "documents": "/api/v1/documents",
+            "chat": "/api/v1/chat",
         }
     }
 

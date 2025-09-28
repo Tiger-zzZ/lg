@@ -12,6 +12,8 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.database import Base
 from app.models.user import User
+from app.models.agent import Agent, AgentExecution
+from app.models.document import Document, DocumentChunk
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -63,6 +65,11 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # 使用环境变量中的DATABASE_URL
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        config.set_main_option('sqlalchemy.url', database_url)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

@@ -1,7 +1,7 @@
 from typing import Dict, Type
-from .base import BaseAgent
-from .implementations import ResearchAgent, CodingAgent, WritingAgent
-from .rag_agent import RAGAgent
+from app.agents.base import BaseAgent
+from app.agents.implementations import ResearchAgent, CodingAgent, WritingAgent, SearchAgent, ChatAgent
+from app.agents.rag_agent import RAGAgent
 
 
 class AgentManager:
@@ -10,10 +10,12 @@ class AgentManager:
     def __init__(self):
         self._agents: Dict[str, BaseAgent] = {}
         self._agent_types: Dict[str, Type[BaseAgent]] = {
+            "search": SearchAgent,
+            "chat": ChatAgent,
+            "rag": RAGAgent,
             "research": ResearchAgent,
             "coding": CodingAgent,
             "writing": WritingAgent,
-            "rag": RAGAgent,
         }
 
     def create_agent(self, agent_type: str) -> BaseAgent:
@@ -41,10 +43,12 @@ class AgentManager:
     def get_available_types(self) -> Dict[str, str]:
         """获取可用的Agent类型"""
         return {
-            "research": "研究Agent - 用于信息研究和分析",
-            "coding": "编程Agent - 用于代码生成和编程任务",
-            "writing": "写作Agent - 用于文本创作和写作",
-            "rag": "RAG Agent - 基于文档知识库的智能问答",
+            "search": "搜索助手 - 智能文档搜索和信息检索",
+            "chat": "对话助手 - 通用AI对话和问题回答",
+            "rag": "文档问答 - 基于知识库的智能问答",
+            "research": "研究助手 - 信息研究和分析",
+            "coding": "编程助手 - 代码生成和编程任务",
+            "writing": "写作助手 - 文本创作和写作",
         }
 
     def remove_agent(self, agent_id: str) -> bool:

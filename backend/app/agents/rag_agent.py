@@ -6,13 +6,13 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
-from ..base import BaseAgent, AgentState
-from ...rag.search import SemanticSearch, SearchResult
-from ...core.config import settings
-from ...core.logger import logger
+from app.agents.base import BaseAgent, AgentState
+from app.rag.search import SemanticSearch, SearchResult
+from app.core.config import settings
+from app.core.logging import logger
 
 
 class RAGAgent(BaseAgent):
@@ -21,29 +21,40 @@ class RAGAgent(BaseAgent):
     def __init__(self, name: str = "RAG Agent"):
         super().__init__(name)
         self.search_engine = SemanticSearch()
-        self.llm = ChatOpenAI(
-            openai_api_key=settings.OPENAI_API_KEY,
-            model="gpt-3.5-turbo",
-            temperature=0.7,
-            max_tokens=1000
-        )
+        self._llm = None
         self.max_context_length = 4000  # 最大上下文长度
         self.search_top_k = 5  # 检索文档数量
+
+    def _get_llm(self):
+        """延迟初始化 ChatOpenAI"""
+        if self._llm is None:
+            if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY in ['', 'EMPTY', 'sk-your-openai-api-key-here']:
+                raise ValueError(
+                    "OpenAI API 密钥未配置。请在 .env 文件中设置有效的 OPENAI_API_KEY。"
+                )
+            self._llm = ChatOpenAI(
+                openai_api_key=settings.OPENAI_API_KEY,
+                openai_api_base=settings.OPENAI_BASE_URL,
+                model=settings.OPENAI_MODEL,
+                temperature=0.7,
+                max_tokens=1000
+            )
+        return self._llm
 
     async def _process(self, state: AgentState) -> AgentState:
         """处理用户查询，集成RAG检索"""
         try:
-            if not state.messages:
+            if not state["messages"]:
                 raise ValueError("没有消息需要处理")
 
             # 获取最新用户消息
-            latest_message = state.messages[-1]
+            latest_message = state["messages"][-1]
             logger.info(f"RAG Agent 处理查询: {latest_message[:100]}...")
 
             # 1. 检索相关文档
             search_results = await self._retrieve_documents(
                 query=latest_message,
-                user_id=state.metadata.get("user_id")
+                user_id=state["metadata"].get("user_id")
             )
 
             # 2. 构建增强上下文
@@ -53,37 +64,53 @@ class RAGAgent(BaseAgent):
             response = await self._generate_response(
                 query=latest_message,
                 context=context,
-                chat_history=state.messages[:-1]
+                chat_history=state["messages"][:-1]
             )
 
             # 4. 更新状态
-            state.messages.append(response)
-            state.metadata["rag_sources"] = [
-                {
-                    "document_id": result.document_id,
-                    "chunk_index": result.chunk_index,
-                    "score": result.score,
-                    "content_preview": result.content[:100]
-                }
-                for result in search_results
-            ]
-            state.metadata["context_length"] = len(context)
-            state.result = response
+            updated_messages = state["messages"].copy()
+            updated_messages.append(response)
+
+            updated_metadata = {
+                **state["metadata"],
+                "rag_sources": [
+                    {
+                        "document_id": result.document_id,
+                        "chunk_index": result.chunk_index,
+                        "score": result.score,
+                        "content_preview": result.content[:100]
+                    }
+                    for result in search_results
+                ],
+                "context_length": len(context)
+            }
 
             logger.info(f"RAG Agent 处理完成，使用了 {len(search_results)} 个文档片段")
 
-            return state
+            return {
+                **state,
+                "messages": updated_messages,
+                "result": response,
+                "metadata": updated_metadata
+            }
 
         except Exception as e:
             logger.error(f"RAG Agent 处理失败: {str(e)}")
             error_message = "抱歉，在处理您的查询时遇到了问题。请稍后重试。"
 
-            state.messages.append(error_message)
-            state.result = error_message
-            state.status = "error"
-            state.error = str(e)
+            updated_messages = state["messages"].copy()
+            updated_messages.append(error_message)
 
-            return state
+            return {
+                **state,
+                "messages": updated_messages,
+                "result": error_message,
+                "status": "error",
+                "metadata": {
+                    **state["metadata"],
+                    "error": str(e)
+                }
+            }
 
     async def _retrieve_documents(
         self,
@@ -182,8 +209,9 @@ class RAGAgent(BaseAgent):
             messages.append(HumanMessage(content=user_message))
 
             # 调用LLM生成回答
+            llm = self._get_llm()
             response = await asyncio.to_thread(
-                self.llm.invoke, messages
+                llm.invoke, messages
             )
 
             return response.content
@@ -254,8 +282,9 @@ class RAGAgent(BaseAgent):
                 HumanMessage(content=summary_prompt)
             ]
 
+            llm = self._get_llm()
             response = await asyncio.to_thread(
-                self.llm.invoke, messages
+                llm.invoke, messages
             )
 
             return response.content
@@ -280,6 +309,6 @@ class RAGAgent(BaseAgent):
             "config": {
                 "search_top_k": self.search_top_k,
                 "max_context_length": self.max_context_length,
-                "model": "gpt-3.5-turbo"
+                "model": settings.OPENAI_MODEL
             }
         }

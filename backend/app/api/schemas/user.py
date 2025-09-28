@@ -18,7 +18,7 @@ class UserCreate(UserBase):
 
 class UserLogin(BaseModel):
     """用户登录Schema"""
-    email: EmailStr
+    username: str
     password: str
 
 

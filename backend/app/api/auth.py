@@ -91,10 +91,11 @@ async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db))
     """用户登录"""
 
     # 验证用户
-    user = db.query(User).filter(User.email == user_credentials.email).first()
+    user = db.query(User).filter(User.username == user_credentials.username).first()
 
+    print(user_credentials)
     if not user or not security.verify_password(user_credentials.password, user.password_hash):
-        logger.warning("Login failed", email=user_credentials.email)
+        logger.warning("Login failed", username=user_credentials.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

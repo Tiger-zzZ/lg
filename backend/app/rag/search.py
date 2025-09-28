@@ -7,11 +7,11 @@ from typing import List, Dict, Optional, Union
 from datetime import datetime
 
 import chromadb
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.core.logger import logger
+from app.core.logging import logger
 
 
 class SearchResult(BaseModel):
@@ -41,9 +41,21 @@ class SemanticSearch:
             port=settings.CHROMA_PORT
         )
         self.collection = self.client.get_or_create_collection("documents")
-        self.embeddings = OpenAIEmbeddings(
-            openai_api_key=settings.OPENAI_API_KEY
-        )
+        self._embeddings = None
+
+    def _get_embeddings(self):
+        """延迟初始化 OpenAI Embeddings"""
+        if self._embeddings is None:
+            if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY in ['', 'EMPTY', 'sk-your-openai-api-key-here']:
+                raise ValueError(
+                    "OpenAI API 密钥未配置。请在 .env 文件中设置有效的 OPENAI_API_KEY。"
+                )
+            self._embeddings = OpenAIEmbeddings(
+                openai_api_key=settings.OPENAI_API_KEY,
+                openai_api_base=settings.OPENAI_BASE_URL,
+                model=settings.EMBEDDING_MODEL
+            )
+        return self._embeddings
 
     async def search(
         self,
@@ -66,8 +78,9 @@ class SemanticSearch:
         """
         try:
             # 生成查询向量
+            embeddings_model = self._get_embeddings()
             query_embedding = await asyncio.to_thread(
-                self.embeddings.embed_query, query
+                embeddings_model.embed_query, query
             )
 
             # 执行向量搜索

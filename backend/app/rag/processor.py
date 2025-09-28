@@ -11,8 +11,8 @@ from datetime import datetime
 
 import chromadb
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.document_loaders import (
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.document_loaders import (
     PyPDFLoader,
     Docx2txtLoader,
     TextLoader,
@@ -21,7 +21,10 @@ from langchain.document_loaders import (
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.core.logger import logger
+from app.core.logging import logger
+from app.core.database import get_db
+from app.models.document import Document, DocumentChunk as DBDocumentChunk
+from sqlalchemy.orm import Session
 
 
 class DocumentChunk(BaseModel):
@@ -50,9 +53,7 @@ class DocumentProcessor:
             port=settings.CHROMA_PORT
         )
         self.collection = self.client.get_or_create_collection("documents")
-        self.embeddings = OpenAIEmbeddings(
-            openai_api_key=settings.OPENAI_API_KEY
-        )
+        self._embeddings = None
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
@@ -60,10 +61,25 @@ class DocumentProcessor:
             separators=["\n\n", "\n", " ", ""]
         )
 
+    def _get_embeddings(self):
+        """延迟初始化 OpenAI Embeddings"""
+        if self._embeddings is None:
+            if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY in ['', 'EMPTY', 'sk-your-openai-api-key-here']:
+                raise ValueError(
+                    "OpenAI API 密钥未配置。请在 .env 文件中设置有效的 OPENAI_API_KEY。"
+                )
+            self._embeddings = OpenAIEmbeddings(
+                openai_api_key=settings.OPENAI_API_KEY,
+                openai_api_base=settings.OPENAI_BASE_URL,
+                model=settings.EMBEDDING_MODEL
+            )
+        return self._embeddings
+
     async def process_document(
         self,
         file_path: str,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        db: Optional[Session] = None
     ) -> ProcessingResult:
         """
         处理单个文档
@@ -71,6 +87,7 @@ class DocumentProcessor:
         Args:
             file_path: 文档路径
             metadata: 额外的元数据
+            db: 数据库会话（可选）
 
         Returns:
             ProcessingResult: 处理结果
@@ -116,6 +133,12 @@ class DocumentProcessor:
 
             # 向量化并存储
             await self._vectorize_and_store(doc_chunks)
+
+            # 保存到数据库（如果提供了数据库会话）
+            if db and metadata:
+                await self._save_to_database(
+                    db, document_id, file_path, doc_chunks, metadata
+                )
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
@@ -170,7 +193,7 @@ class DocumentProcessor:
             '.pdf': PyPDFLoader,
             '.docx': Docx2txtLoader,
             '.txt': TextLoader,
-            '.md': UnstructuredMarkdownLoader
+            '.md': TextLoader  # 暂时使用TextLoader代替UnstructuredMarkdownLoader
         }
 
         loader_class = loaders.get(file_extension)
@@ -193,13 +216,24 @@ class DocumentProcessor:
         texts = [chunk.content for chunk in chunks]
 
         # 生成嵌入向量
+        embeddings_model = self._get_embeddings()
         embeddings = await asyncio.to_thread(
-            self.embeddings.embed_documents, texts
+            embeddings_model.embed_documents, texts
         )
 
         # 准备存储数据
         ids = [chunk.id for chunk in chunks]
-        metadatas = [chunk.metadata for chunk in chunks]
+        # 确保metadata中的所有值都是ChromaDB支持的类型
+        metadatas = []
+        for chunk in chunks:
+            metadata = {}
+            for key, value in chunk.metadata.items():
+                # 将UUID等对象转换为字符串
+                if hasattr(value, '__str__') and not isinstance(value, (str, int, float, bool, type(None))):
+                    metadata[key] = str(value)
+                else:
+                    metadata[key] = value
+            metadatas.append(metadata)
         documents = [chunk.content for chunk in chunks]
 
         # 存储到ChromaDB
@@ -211,6 +245,62 @@ class DocumentProcessor:
         )
 
         logger.info(f"成功存储 {len(chunks)} 个文档块到向量数据库")
+
+    async def _save_to_database(
+        self,
+        db: Session,
+        document_id: str,
+        file_path: str,
+        chunks: List[DocumentChunk],
+        metadata: Dict
+    ):
+        """保存文档信息到数据库"""
+        try:
+            from pathlib import Path
+            import os
+
+            # 创建文档记录
+            file_stats = os.stat(file_path) if os.path.exists(file_path) else None
+
+            db_document = Document(
+                document_id=document_id,
+                file_name=metadata.get("original_filename", Path(file_path).name),
+                file_path=file_path,
+                file_size=metadata.get("file_size", file_stats.st_size if file_stats else 0),
+                content_type=metadata.get("content_type", ""),
+                chunks_count=len(chunks),
+                processing_status='completed',
+                user_id=metadata.get("user_id", "00000000-0000-0000-0000-000000000000"),
+                document_metadata={
+                    "processing_method": "full_rag",
+                    "embedding_model": settings.EMBEDDING_MODEL,
+                    **{k: v for k, v in metadata.items() if k not in ["user_id"]}
+                },
+                processed_at=datetime.utcnow()
+            )
+
+            db.add(db_document)
+            db.flush()  # 获取数据库生成的ID
+
+            # 创建文档块记录
+            for chunk in chunks:
+                db_chunk = DBDocumentChunk(
+                    document_id=db_document.id,
+                    chunk_index=chunk.metadata.get("chunk_index", 0),
+                    content=chunk.content,
+                    content_preview=chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content,
+                    chroma_id=chunk.id,
+                    chunk_metadata=chunk.metadata
+                )
+                db.add(db_chunk)
+
+            db.commit()
+            logger.info(f"成功保存文档到数据库: {document_id}, 用户: {metadata.get('user_id')}")
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"保存文档到数据库失败: {document_id}, 错误: {str(e)}")
+            raise
 
     def _generate_document_id(self, file_path: str) -> str:
         """生成文档唯一ID"""

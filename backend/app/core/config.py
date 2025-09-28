@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     # OpenAI配置 (用于嵌入和LLM)
     OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    EMBEDDING_MODEL: str = "text-embedding-ada-002"
 
     # CORS配置
     ALLOWED_ORIGINS: List[str] = [
