@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # 数据库服务
+  postgres:
+    image: postgres:15-alpine
+    container_name: lg-postgres
+    environment:
+      POSTGRES_DB: lg_platform
+      POSTGRES_USER: lg_user
+      POSTGRES_PASSWORD: lg_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lg_user -d lg_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: lg-redis
+    ports:
+      - "6378:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 向量数据库 (轻量级)
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: lg-chroma
+    ports:
+      - "8001:8000"  # 避免与后端端口冲突
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_HTTP_PORT=8000
+
+  # 后端服务 (开发环境)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend.dev
+    container_name: lg-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://lg_user:lg_password@postgres:5432/lg_platform
+      - REDIS_URL=redis://redis:6378/0
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/app:/app/app:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+    restart: unless-stopped
+    profiles: ["full"]
+
+  # 前端服务 (开发环境)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend.dev
+    container_name: lg-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    profiles: ["full"]
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  chroma_data:
+    driver: local
+
+networks:
+  default:
+    name: lg-network

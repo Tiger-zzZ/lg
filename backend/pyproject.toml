@@ -1,0 +1,74 @@
+[project]
+name = "lg-backend"
+version = "0.1.0"
+description = "LangGraph Multi-Agent Platform Backend"
+authors = [
+    {name = "LG Platform Team", email = "team@lg-platform.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Web框架
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "python-multipart>=0.0.6",
+
+    # 数据库
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "psycopg2-binary>=2.9.0",
+    "redis>=5.0.0",
+
+    # LangChain生态 (快速起步版本)
+    "langgraph>=0.2.0",
+    "langchain>=0.1.0",
+    "langchain-openai>=0.0.5",
+
+    # 向量数据库 (轻量级)
+    "chromadb>=0.4.0",
+    "openai>=1.0.0",
+
+    # 认证和安全
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.0",
+
+    # 文档处理 (基础版)
+    "python-docx>=1.1.0",
+    "PyPDF2>=3.0.0",
+
+    # 实用工具
+    "pydantic[email]>=2.4.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.25.0",
+
+    # 监控和日志 (轻量级)
+    "structlog>=23.1.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.7.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "httpx>=0.25.0",  # for testing
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
