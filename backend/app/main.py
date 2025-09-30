@@ -262,8 +262,8 @@ async def test_models_fixed():
     import asyncio
     # from langchain_community.embeddings import ModelScopeEmbeddings
     # 使用正确的模型名称
-    correct_llm_model = "deepseek-chat"
-    correct_embedding_model = "bge-m3"
+    correct_llm_model = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
+    correct_embedding_model = "BAAI/bge-large-zh-v1.5"
 
     results = {
         "config": {
@@ -286,6 +286,7 @@ async def test_models_fixed():
             max_tokens=50
         )
 
+        # 这里不会阻塞主线程，因为asyncio.to_thread会在后台线程中执行llm.invoke，主线程会等待结果返回（即await），但不会阻塞事件循环的其他任务。
         response = await asyncio.to_thread(
             llm.invoke, "说'你好'"
         )

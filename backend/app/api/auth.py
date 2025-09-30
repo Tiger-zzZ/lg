@@ -108,7 +108,7 @@ async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db))
         )
 
     # 创建访问令牌
-    access_token_expires = timedelta(minutes=30)
+    access_token_expires = timedelta(minutes=300)
     access_token = security.create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )

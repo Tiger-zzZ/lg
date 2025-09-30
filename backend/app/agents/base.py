@@ -1,4 +1,4 @@
-from typing import TypedDict, Dict, Any, List
+from typing import TypedDict, Dict, Any, List, Optional
 from langgraph.graph import StateGraph
 from abc import ABC, abstractmethod
 import uuid
@@ -16,6 +16,7 @@ class AgentState(TypedDict):
     metadata: Dict[str, Any]
     status: str  # pending, running, completed, failed
     execution_id: str
+    tool_results: Optional[List[Dict[str, Any]]]  # 工具执行结果
 
 
 class BaseAgent(ABC):
@@ -26,7 +27,46 @@ class BaseAgent(ABC):
         self.description = description
         self.id = str(uuid.uuid4())
         self.created_at = datetime.utcnow()
+        self.enabled_tools: List[str] = []  # 启用的工具列表
         self.graph = self._create_graph()
+
+    def enable_tools(self, tool_names: List[str]):
+        """启用指定工具"""
+        self.enabled_tools = tool_names
+        logger.info(f"Agent {self.name} 启用工具: {tool_names}")
+
+    def disable_tools(self):
+        """禁用所有工具"""
+        self.enabled_tools = []
+        logger.info(f"Agent {self.name} 禁用所有工具")
+
+    async def _use_tool(self, tool_name: str, **kwargs) -> Dict[str, Any]:
+        """使用工具"""
+        if tool_name not in self.enabled_tools:
+            return {
+                "success": False,
+                "error": f"工具未启用: {tool_name}",
+                "tool_name": tool_name
+            }
+
+        try:
+            from app.agents.tools import tool_manager
+            result = await tool_manager.execute_tool(tool_name, **kwargs)
+
+            return {
+                "success": result.success,
+                "data": result.data,
+                "error": result.error,
+                "metadata": result.metadata,
+                "tool_name": tool_name
+            }
+        except Exception as e:
+            logger.error(f"工具使用失败: {tool_name}", error=str(e))
+            return {
+                "success": False,
+                "error": f"工具执行异常: {str(e)}",
+                "tool_name": tool_name
+            }
 
     def _create_graph(self) -> StateGraph:
         """创建LangGraph工作流"""
@@ -97,6 +137,7 @@ class BaseAgent(ABC):
             "metadata": metadata or {},
             "status": "pending",
             "execution_id": "",
+            "tool_results": [],
         }
 
         try:

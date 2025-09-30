@@ -1,6 +1,9 @@
 from typing import Dict, Type
 from app.agents.base import BaseAgent
-from app.agents.implementations import ResearchAgent, CodingAgent, WritingAgent, SearchAgent, ChatAgent
+from app.agents.implementations import (
+    ResearchAgent, CodingAgent, WritingAgent, 
+    SearchAgent, ChatAgent, DataAnalystAgent
+)
 from app.agents.rag_agent import RAGAgent
 
 
@@ -16,6 +19,7 @@ class AgentManager:
             "research": ResearchAgent,
             "coding": CodingAgent,
             "writing": WritingAgent,
+            "data_analyst": DataAnalystAgent,  # 新增数据分析师
         }
 
     def create_agent(self, agent_type: str) -> BaseAgent:
@@ -49,6 +53,7 @@ class AgentManager:
             "research": "研究助手 - 信息研究和分析",
             "coding": "编程助手 - 代码生成和编程任务",
             "writing": "写作助手 - 文本创作和写作",
+            "data_analyst": "数据分析师 - 专业数据分析和可视化",
         }
 
     def remove_agent(self, agent_id: str) -> bool:
