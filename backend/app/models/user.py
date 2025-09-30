@@ -25,6 +25,7 @@ class User(Base):
     # 关联
     agents = relationship("Agent", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
+    workflows = relationship("WorkflowDefinition", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.username}>"

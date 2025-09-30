@@ -27,13 +27,16 @@ class State(TypedDict):
 def chatbot(state: State):
     return {"messages": [llm.invoke(state["messages"])]}
 
+async def chatbot_async(state: State):
+    return {"messages": [await llm.ainvoke(state["messages"])]}
+
 class StreamingState(State):
     messages: list
     streaming: bool = False
 
 
 graph_builder = StateGraph(State)
-graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_node("chatbot", chatbot_async)
 
 graph_builder.add_edge(START, "chatbot")
 graph_builder.add_edge("chatbot", END)
@@ -53,6 +56,12 @@ def stream_graph_updates(user_input: str):
                 print("Assistant:", value[-1].content)
             # print("Assistant:", value)
 
+async def graph_async(user_input: str):
+    async for event in graph.astream({"messages": [{"role": "user", "content": user_input}], "streaming": True}, stream_mode="values"):
+        for value in event.values():
+            if isinstance(value[-1], AIMessage):
+                print("Assistant:", value[-1].content)
+
 def main():
     while True:
         try:
@@ -69,4 +78,5 @@ def main():
             break
 
 if __name__ == "__main__":
-    main()
+    # main()
+    asyncio.run(graph_async("讲个笑话"))

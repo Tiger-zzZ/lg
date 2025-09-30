@@ -45,7 +45,7 @@ async def main():
             chunk_data = event["data"]["chunk"]
             
             # 提取内容
-            if isinstance(chunk_data, AIMessage):
+            if isinstance(chunk_data[0], AIMessage):
                 message_chunk = chunk_data[0]
                 if hasattr(message_chunk, 'content') and message_chunk.content:
                     print(message_chunk.content, end="", flush=True)

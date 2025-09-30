@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Dict
 import asyncio
 from datetime import datetime
@@ -403,11 +404,39 @@ async def list_agents(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """列出当前用户的所有Agent"""
+    """列出当前用户的所有Agent（包含统计信息）"""
     agents = db.query(Agent).filter(Agent.user_id == current_user.id).all()
 
-    return [
-        AgentResponse(
+    result = []
+    for agent in agents:
+        # 查询执行统计
+        executions = db.query(AgentExecution).filter(
+            AgentExecution.agent_id == agent.id
+        ).all()
+
+        execution_count = len(executions)
+        completed_executions = [e for e in executions if e.status == 'completed']
+        success_count = len(completed_executions)
+        success_rate = (success_count / execution_count * 100) if execution_count > 0 else 0
+
+        # 计算平均执行时长（确保类型转换）
+        durations = []
+        for e in completed_executions:
+            if e.duration_ms is not None:
+                # 确保转换为float类型
+                try:
+                    duration = float(e.duration_ms)
+                    durations.append(duration)
+                except (TypeError, ValueError):
+                    continue
+        avg_duration = sum(durations) / len(durations) if durations else None
+
+        # 获取最后一次执行
+        last_execution = db.query(AgentExecution).filter(
+            AgentExecution.agent_id == agent.id
+        ).order_by(AgentExecution.started_at.desc()).first()
+
+        agent_response = AgentResponse(
             id=str(agent.id),
             name=agent.name,
             description=agent.description,
@@ -419,8 +448,22 @@ async def list_agents(
             updated_at=agent.updated_at,
             last_used_at=agent.last_used_at,
         )
-        for agent in agents
-    ]
+
+        # 添加统计字段（使用额外字段）
+        agent_dict = agent_response.dict()
+        agent_dict['execution_count'] = execution_count
+        agent_dict['success_rate'] = round(success_rate, 1)
+        agent_dict['avg_duration'] = round(avg_duration) if avg_duration else None
+        agent_dict['last_execution'] = {
+            'id': str(last_execution.id),
+            'status': last_execution.status,
+            'started_at': last_execution.started_at.isoformat() if last_execution.started_at else None,
+            'error_message': last_execution.error_message
+        } if last_execution else None
+
+        result.append(agent_dict)
+
+    return result
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)

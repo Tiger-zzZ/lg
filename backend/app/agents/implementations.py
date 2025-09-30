@@ -249,7 +249,8 @@ class ChatAgent(BaseAgent):
 
             # 调用LLM
             llm = self._get_llm()
-            response = await asyncio.to_thread(llm.invoke, messages)
+            # response = await asyncio.to_thread(llm.invoke, messages)
+            response = await llm.ainvoke(messages)
 
             return response.content
 
