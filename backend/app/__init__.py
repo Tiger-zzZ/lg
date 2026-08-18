@@ -1,1 +1,1 @@
-# 创建空的__init__.py文件让Python识别为包
+"""lg agent runtime."""

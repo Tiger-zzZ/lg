@@ -62,3 +62,14 @@ htmlcov/
 
 # UV lock file (keep this for reproducible builds)
 # uv.lock
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
+# LangGraph local runtime
+.langgraph_api/
+
+# Deep Research workspace (FilesystemBackend)
+.workspace/
+backend/.workspace/

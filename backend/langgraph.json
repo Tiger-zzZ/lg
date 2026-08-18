@@ -1,0 +1,9 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "hello": "./app/graphs/hello.py:graph",
+    "deep_research": "./app/graphs/deep_research.py:graph",
+    "supervisor": "./app/graphs/supervisor.py:graph"
+  },
+  "env": ".env"
+}
