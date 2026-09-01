@@ -51,9 +51,20 @@
 
 ### Phase 6: 验证与文档
 
-- **Status:** in-progress
-- 已完成：无 LLM 编译 / interrupt / SSE 单测；README 三条 graph
-- 未完成：前端 `npm install`、`langgraph dev`、真 LLM 对话
+- **Status:** complete
+- Closed: 2026-09-09
+- Actions taken:
+  - `cd lg/backend && pytest` → 21 passed（含 `test_deep_research_studio_export_has_no_custom_store`）
+  - 前端 `npm install` + `tsc` 绿；提交 `frontend/package-lock.json`
+  - `langgraph validate`：hello / deep_research / supervisor valid
+  - FastAPI `127.0.0.1:8010`（cwd=`lg/backend`）`/health` `llm_configured:true`；hello 真 LLM SSE 成功
+  - `langgraph dev --no-browser --port 2024` 加载三条 graph；`GET /ok` → `{"ok":true}`
+  - 去掉 deep_research 模块级 baked `InMemoryStore`，Studio 不再 `GraphLoadError`
+  - README / backend README：必须在 `lg/backend` 启动；8000 占用时 8010 + `LG_API_PROXY`
+- Residual (non-blocking):
+  - 本机无 docker，compose postgres 跳过
+  - 8000 仍被 Code Helper 占用，不要杀
+  - 前端 `npm run dev` 需 `LG_API_PROXY=http://127.0.0.1:8010`
 
 ### Phase 7: A2A
 
@@ -63,7 +74,7 @@
 
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
-| `cd lg/backend && pytest` | 无 LLM | 全绿 | 20 passed | pass |
+| `cd lg/backend && pytest` | 无 LLM | 全绿 | 21 passed | pass |
 | `test_hello_graph_compiles` | FakeToolChatModel | 可 compile + invoke | hi | pass |
 | `test_interrupt_and_resume` | confirm_action → Command(resume) | HITL 再恢复 | 已按人类决定处理 | pass |
 | `test_deep_research_compiles` | FakeToolChatModel | 含 HITL 节点 | pass | pass |
@@ -71,7 +82,11 @@
 | `test_supervisor_compiles` | FakeToolChatModel | 含四个节点 | pass | pass |
 | `test_health_and_threads` | TestClient | graphs 含三条 | pass | pass |
 | 从 flyfly 根 `pytest` | 默认收集 | 只跑 lg | 扫到 pubmed_mcp | invalid / 不要这样跑 |
-| `langgraph dev` / 前端 | — | 可启动 | 未跑 | skipped |
+| `langgraph validate` | 三条 graph | valid | valid | pass |
+| `langgraph dev --port 2024` | Studio 加载 | `/ok` true | `{"ok":true}` | pass |
+| 真 LLM hello SSE | FastAPI 8010 | 有回复 | thread `5f315f45-...` 回复自我介绍 | pass |
+| frontend `tsc` | npm install 后 | 通过 | 通过 | pass |
+| compose postgres | docker | 可 up | 本机无 docker | skipped |
 
 ## Error Log
 
@@ -84,13 +99,16 @@
 | 2026-09-09 | FakeChatModel 无 `bind_tools` | 1 | `FakeToolChatModel` |
 | 2026-09-09 | `create_react_agent` V1 弃用 | 1 | `langchain.agents.create_agent` |
 | 2026-09-09 | supervisor 包内部仍 `create_react_agent` | 1 | worker 用 `create_agent`；包警告可忽略 |
+| 2026-09-09 | `langgraph dev` GraphLoadError（自定义 InMemoryStore） | 1 | 模块级 graph 不再 bake store |
+| 2026-09-09 | cwd≠backend → `llm_configured:false` | 1 | 必须从 `lg/backend` 启动 uvicorn |
+| 2026-09-09 | 端口 8000 被占用 | 1 | 改 8010 + `LG_API_PROXY` |
 
 ## 5-Question Reboot Check
 
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 4/5 complete；Phase 6 live 冒烟未做 |
-| Where am I going? | Phase 6：`langgraph dev` / 前端 / 真 LLM；然后可选 Phase 7 A2A |
+| Where am I? | Phase 6 complete；准备 Phase 7 A2A extras |
+| Where am I going? | `extras/a2a/` 暴露 supervisor `research_agent`；不进默认 graphs |
 | What's the goal? | Deep Research + Supervisor 前沿 Agent 学习项目 |
-| What have I learned? | deepagents HITL resume 是 `{decisions:[{type}]}`；MCP 必须可选；pytest / uv 必须在 `lg/backend` |
-| What have I done? | 三条 graph + SSE/HITL + 可选 MCP + StoreBackend；20 tests pass |
+| What have I learned? | Studio 不能 bake 自定义 store；uvicorn 必须在 `lg/backend` 才能读 `.env`；deepagents HITL resume 是 `{decisions:[{type}]}` |
+| What have I done? | 三条 graph + SSE/HITL + 可选 MCP + StoreBackend；live 冒烟；21 tests pass |

@@ -6,11 +6,11 @@
 
 ## Next Step
 
-Phase 6：补 live 冒烟（`langgraph dev` / 前端 `npm install` / 真 LLM 对话）和 README 两条主线的操作说明。未要求则不要 git commit。Phase 7（A2A）仍不进默认 graphs。
+Phase 7：落地 `extras/a2a/`（官方 `a2a-sdk` v1.0 路由工厂 + 把 supervisor 的 `research_agent` 暴露为 A2A endpoint）。不进默认 `langgraph.json`，不改主 graph API。完成后按阶段 commit。不 push。
 
 ## Current Phase
 
-Phase 6
+Phase 7
 
 ## Phases
 
@@ -57,11 +57,12 @@ Phase 6
 
 ### Phase 6: 验证与文档
 
-- [x] 无 LLM 的图编译 / interrupt / SSE 单测（Phase 4/5 已加；`cd lg/backend && pytest` 20 passed）
+- [x] 无 LLM 的图编译 / interrupt / SSE 单测（`cd lg/backend && pytest` 21 passed）
 - [x] README：三条 graph、LLM / MCP / workspace 配置、`langgraph dev` 启动说明
-- [ ] live 冒烟：前端 `npm install`、`langgraph dev`、真 LLM 对话（非阻塞于代码，待本机跑）
+- [x] live 冒烟：前端 `npm install` + `tsc`；`langgraph validate` 三条 graph valid；FastAPI `127.0.0.1:8010` 真 LLM hello SSE；`langgraph dev --port 2024` 加载 hello/deep_research/supervisor
+- [x] Studio 修复：`deep_research` 模块级 graph 不再 bake `InMemoryStore`（否则 `GraphLoadError`）
 - [x] 旧代码去向说明（git 历史即反面教材）
-- **Status:** in-progress
+- **Status:** complete
 
 ### Phase 7: A2A 支线（不阻塞主线）
 
@@ -93,7 +94,7 @@ Phase 6
 | MCP 只做客户端 | deepagents 原生支持 `tools=` 接 MCP；自写 MCP server 偏离主线 |
 | A2A 独立 `extras/a2a/` | 2026 已有 v1.0（Linux Foundation），值得体验，但不能拖主线 |
 | 参考而不 fork | 复用 deepagents / langgraph-supervisor / agent-service-toolkit 的模式，不拷贝其业务代码 |
-| 不自动 git commit | 用户未要求；每个 Phase 结束再请用户决定是否 commit |
+| 按阶段 git commit，不 push | 用户 `/goal` 授权每个阶段 commit；push 仍未要求 |
 | MCP 默认关闭，失败不阻塞 compile | 图必须无 MCP server / 无真 LLM 也能编译；`MCP_ENABLED=true` 才 spawn 官方 filesystem + fetch |
 | HITL resume 按 graph 适配 | 前端继续发 `approve`/`reject`；`deep_research` 转成 `{decisions:[{type}]}` |
 | StoreBackend `/memories/` + FilesystemBackend `/workspace/` | 官方 CompositeBackend 路由；无 DATABASE_URL 用 InMemoryStore |
@@ -112,10 +113,14 @@ Phase 6
 | `GenericFakeChatModel.bind_tools` NotImplemented | 1 | 测试用 `FakeToolChatModel`（FakeMessagesListChatModel + bind_tools 返回 self） |
 | `langgraph-supervisor` 内部仍调 `create_react_agent` | 1 | 我们的 worker 用 `create_agent`；supervisor 包警告可忽略，不自研调度器 |
 | 官方 `@modelcontextprotocol/server-fetch` npm 包已不作为主路径 | 1 | fetch 用官方 Python `uvx mcp-server-fetch`；filesystem 仍用 `npx @modelcontextprotocol/server-filesystem` |
+| `langgraph dev` GraphLoadError：deep_research 模块级 graph 含自定义 InMemoryStore | 1 | 去掉 `store = store or InMemoryStore()`；Studio 路径 store=None，StoreBackend 运行时 `get_store()` |
+| 本机 8000 被 Code Helper 占用 | 1 | 后端改 8010；前端 `LG_API_PROXY`；不杀 8000 |
+| `uv run uvicorn` / `uv run python -m uvicorn` 找不到模块 | 1 | 用 `backend/.venv/bin/uvicorn`，且 cwd=`lg/backend` 才能读 `.env` |
+| 本机无 docker | 1 | compose postgres 冒烟跳过，走 InMemorySaver/Store |
 
 ## Notes
 
 - 实施前必须再读本文件 Goal / Decisions。
 - 外部网页内容只进 `findings.md`。
 - Phase 7 可在 Phase 6 之后单独开，也可与 Phase 5 并行，但不得改主 graph 的 API 形状。
-- 计划结构（A+C / MCP 主线 / A2A 支线 / Postgres checkpointer）不改。Phase 4/5 代码已落地；Phase 6 只补 live 冒烟，不提前做 A2A。
+- 计划结构（A+C / MCP 主线 / A2A 支线 / Postgres checkpointer）不改。Phase 6 live 冒烟已完成；Phase 7 只加 `extras/a2a/`。

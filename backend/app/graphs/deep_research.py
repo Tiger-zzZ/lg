@@ -4,7 +4,6 @@ from pathlib import Path
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend, StoreBackend
-from langgraph.store.memory import InMemoryStore
 
 from app.config import get_settings
 from app.models import get_chat_model
@@ -48,13 +47,14 @@ def default_workspace_dir() -> Path:
     return path
 
 
-def build_research_backend(*, workspace_dir: str | Path, store) -> CompositeBackend:
+def build_research_backend(*, workspace_dir: str | Path, store=None) -> CompositeBackend:
     root = Path(workspace_dir)
     root.mkdir(parents=True, exist_ok=True)
     return CompositeBackend(
         default=StateBackend(),
         routes={
             "/workspace/": FilesystemBackend(root_dir=root, virtual_mode=True),
+            # store=None → StoreBackend 在运行时 get_store()，给 `langgraph dev` 注入平台 store。
             "/memories/": StoreBackend(
                 namespace=lambda _rt: ("memories",),
                 store=store,
@@ -72,7 +72,6 @@ def build_deep_research_agent(
     workspace_dir: str | Path | None = None,
     **_kwargs,
 ):
-    store = store or InMemoryStore()
     workspace = Path(workspace_dir) if workspace_dir else default_workspace_dir()
     extra_tools = list(tools or [])
     interrupt_on: dict[str, bool] = {"write_file": True}
@@ -107,4 +106,5 @@ def build_deep_research_agent(
 
 
 # Exported for langgraph.json / `langgraph dev`.
+# Do not bake InMemoryStore/checkpointer here — Studio injects persistence.
 graph = build_deep_research_agent()

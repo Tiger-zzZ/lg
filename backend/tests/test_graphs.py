@@ -79,6 +79,14 @@ def test_supervisor_compiles():
         assert name in graph.nodes
 
 
+def test_deep_research_studio_export_has_no_custom_store(tmp_path: Path):
+    graph = build_deep_research_agent(
+        model=FakeToolChatModel(responses=[AIMessage(content="ok")]),
+        workspace_dir=tmp_path,
+    )
+    assert getattr(graph, "store", None) is None
+
+
 def test_compile_graph_unknown():
     try:
         compile_graph("nope")
