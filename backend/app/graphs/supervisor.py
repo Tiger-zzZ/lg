@@ -34,6 +34,16 @@ If not, reply with REVISE and a short bullet list of required changes.
 """
 
 
+def build_research_agent(*, model=None, tools=None):
+    """Worker used by supervisor, also exposed as extras/a2a endpoint."""
+    return create_agent(
+        model=model or get_chat_model(),
+        tools=list(tools or []),
+        system_prompt=RESEARCH_AGENT_PROMPT,
+        name="research_agent",
+    )
+
+
 def build_supervisor_graph(
     *,
     model=None,
@@ -44,12 +54,7 @@ def build_supervisor_graph(
 ):
     chat = model or get_chat_model()
     extra_tools = list(tools or [])
-    research_agent = create_agent(
-        model=chat,
-        tools=extra_tools,
-        system_prompt=RESEARCH_AGENT_PROMPT,
-        name="research_agent",
-    )
+    research_agent = build_research_agent(model=chat, tools=extra_tools)
     writer_agent = create_agent(
         model=chat,
         tools=[],

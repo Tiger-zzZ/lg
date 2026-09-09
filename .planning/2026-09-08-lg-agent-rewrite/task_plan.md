@@ -6,11 +6,11 @@
 
 ## Next Step
 
-Phase 7：落地 `extras/a2a/`（官方 `a2a-sdk` v1.0 路由工厂 + 把 supervisor 的 `research_agent` 暴露为 A2A endpoint）。不进默认 `langgraph.json`，不改主 graph API。完成后按阶段 commit。不 push。
+计划内 Phase 1–7 已完成。后续可选：compose postgres 冒烟（本机需 docker）、前端 `LG_API_PROXY=http://127.0.0.1:8010 npm run dev`、A2A JSON-RPC `message/send` live 对打。不 push，除非再要求。
 
 ## Current Phase
 
-Phase 7
+complete
 
 ## Phases
 
@@ -66,10 +66,10 @@ Phase 7
 
 ### Phase 7: A2A 支线（不阻塞主线）
 
-- [ ] 独立目录 `extras/a2a/`，不进入 `langgraph.json` 默认 graphs
-- [ ] 一个最小 A2A agent card + 把 supervisor 的一个 worker 暴露为 A2A endpoint
-- [ ] README 明确：演示互操作，不是生产依赖
-- **Status:** pending
+- [x] 独立目录 `extras/a2a/`，不进入 `langgraph.json` 默认 graphs
+- [x] 最小 A2A agent card + 把 supervisor `research_agent` 暴露为 JSON-RPC endpoint（`a2a-sdk` 1.1.2：`create_agent_card_routes` + `create_jsonrpc_routes`）
+- [x] README 明确：演示互操作，不是生产依赖；无 SDK 时主仓库单测 `importorskip`
+- **Status:** complete
 
 ## Key Questions
 
@@ -123,4 +123,4 @@ Phase 7
 - 实施前必须再读本文件 Goal / Decisions。
 - 外部网页内容只进 `findings.md`。
 - Phase 7 可在 Phase 6 之后单独开，也可与 Phase 5 并行，但不得改主 graph 的 API 形状。
-- 计划结构（A+C / MCP 主线 / A2A 支线 / Postgres checkpointer）不改。Phase 6 live 冒烟已完成；Phase 7 只加 `extras/a2a/`。
+- 计划结构（A+C / MCP 主线 / A2A 支线 / Postgres checkpointer）不改。Phase 1–7 代码已落地。

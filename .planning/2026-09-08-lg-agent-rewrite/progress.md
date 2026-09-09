@@ -68,13 +68,21 @@
 
 ### Phase 7: A2A
 
-- **Status:** pending（不阻塞主线）
+- **Status:** complete
+- Closed: 2026-09-09
+- Actions taken:
+  - `extras/a2a/`：独立 `a2a-sdk[http-server]` + Starlette 路由工厂，端口默认 9999
+  - Agent card `lg-research-agent`；executor 调 `build_research_agent()`（supervisor worker）
+  - 不进 `langgraph.json`，不改主 graph HTTP API
+  - 主仓库 `tests/test_a2a_extra.py` 无 SDK 则 skip；extras venv 下 card HTTP 200
+- Residual:
+  - 未做真 LLM 的 A2A `message/send` live 对打
 
 ## Test Results
 
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
-| `cd lg/backend && pytest` | 无 LLM | 全绿 | 21 passed | pass |
+| `cd lg/backend && pytest` | 无 LLM | 全绿 | 22 passed（A2A 无 SDK skip） | pass |
 | `test_hello_graph_compiles` | FakeToolChatModel | 可 compile + invoke | hi | pass |
 | `test_interrupt_and_resume` | confirm_action → Command(resume) | HITL 再恢复 | 已按人类决定处理 | pass |
 | `test_deep_research_compiles` | FakeToolChatModel | 含 HITL 节点 | pass | pass |
@@ -107,8 +115,8 @@
 
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 6 complete；准备 Phase 7 A2A extras |
-| Where am I going? | `extras/a2a/` 暴露 supervisor `research_agent`；不进默认 graphs |
+| Where am I? | Phase 1–7 complete |
+| Where am I going? | 可选 live：前端 8010 proxy、compose postgres、A2A message/send |
 | What's the goal? | Deep Research + Supervisor 前沿 Agent 学习项目 |
-| What have I learned? | Studio 不能 bake 自定义 store；uvicorn 必须在 `lg/backend` 才能读 `.env`；deepagents HITL resume 是 `{decisions:[{type}]}` |
-| What have I done? | 三条 graph + SSE/HITL + 可选 MCP + StoreBackend；live 冒烟；21 tests pass |
+| What have I learned? | A2A SDK v1.0 用 protobuf AgentCard + 路由工厂，不再有 A2AStarletteApplication；Studio 不能 bake 自定义 store |
+| What have I done? | 三条 graph + SSE/HITL + 可选 MCP + extras/a2a；主测 22 passed（A2A 无 SDK skip） |

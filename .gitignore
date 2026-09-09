@@ -73,3 +73,6 @@ frontend/node_modules/
 # Deep Research workspace (FilesystemBackend)
 .workspace/
 backend/.workspace/
+
+# Optional extras venv
+extras/**/.venv/

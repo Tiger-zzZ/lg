@@ -68,6 +68,15 @@ def test_deep_research_write_file_interrupt(tmp_path: Path):
     assert resumed["messages"][-1].content
 
 
+def test_research_agent_builder_compiles():
+    from app.graphs.supervisor import build_research_agent
+
+    graph = build_research_agent(
+        model=FakeToolChatModel(responses=[AIMessage(content="notes")])
+    )
+    assert graph is not None
+
+
 def test_supervisor_compiles():
     graph = build_supervisor_graph(
         model=FakeToolChatModel(responses=[AIMessage(content="done")]),
