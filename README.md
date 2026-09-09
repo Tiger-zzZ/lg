@@ -1,8 +1,6 @@
-# lg — Deep Research + Supervisor 学习项目
+# lg — Deep Research + Supervisor
 
-旧实现（自研 AgentManager / JWT / Chroma / 可视化编辑器）已清空，git 历史保留作反面教材。
-
-当前是可运行的主应用：同一套 SSE / checkpointer / 极简前端挂三条 graph。
+学习项目：同一套 SSE / checkpointer / 极简前端挂三条 LangGraph。
 
 | graph | 形态 |
 |-------|------|
@@ -12,7 +10,7 @@
 
 A2A 在 `extras/a2a/`，**不进**默认 `langgraph.json`，也不是生产依赖。
 
-## LLM 配置（开发阶段必填才能对话）
+## LLM 配置
 
 单测不打真模型。要在 UI / Studio 里跑，把 key 写进 **`lg/backend/.env`**（已 gitignore）。`langgraph.json` 的 `"env": ".env"` 和 FastAPI 都读这个文件。**必须在 `lg/backend` 启动**，否则 `.env` 可能读不到（`GET /health` 的 `llm_configured` 会是 `false`）。
 
@@ -35,7 +33,7 @@ cp .env.example .env
 ## 跑起来
 
 ```bash
-# 1. Postgres（可选。本机没有 docker 就跳过，后端走内存 checkpointer/store）
+# 1. Postgres（可选。没有 docker 就跳过，后端走内存 checkpointer/store）
 docker compose up -d postgres
 
 # 2. 后端（必须在 lg/backend）
@@ -93,7 +91,7 @@ SSE 帧：`token` / `message` / `tool` / `interrupt` / `done` / `error`。
 
 ```bash
 cd backend
-uv run pytest          # 必须在 lg/backend，不要从 flyfly 根跑
+uv run pytest          # 必须在 lg/backend，不要从仓库外的父目录跑
 ```
 
 ## A2A（支线）
